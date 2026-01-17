@@ -1,8 +1,6 @@
 import argparse
 import asyncio
-import json
-from .browser import fetch_page_source
-from .extract import extract_page_data
+from .browser import agent_extract_page
 import os
 from .config import load_config
 
@@ -11,30 +9,22 @@ load_config()
 if not os.getenv("BROWSER_USE_API_KEY"):
     raise SystemExit("BROWSER_USE_API_KEY is not set. Put it in .env or export it.")
 
-
 def main():
-    # Simple CLI setup.
     parser = argparse.ArgumentParser(description="Browser-Use Mini Agent")
-    parser.add_argument("command", choices=["scrape"], help="Command to run")
-    parser.add_argument("--url", required=True, help="URL to scrape")
-    parser.add_argument("--out", required=True, help="Output JSON file path")
-    
+    parser.add_argument("command", choices=["scrape"])
+    parser.add_argument("--url", required=True)
+    parser.add_argument("--out", required=True)
+
     args = parser.parse_args()
-    
+
     if args.command == "scrape":
         print(f"🚀 Visiting {args.url}...")
-        
-        # 1. Hit the site. We need asyncio.run wrapper since main() is synchronous.
-        html = asyncio.run(fetch_page_source(args.url))
-        
-        # 2. Pass the raw HTML to our extraction logic (LLM or parser).
-        print("🔍 Extracting data...")
-        data = extract_page_data(html)
-        
-        # 3. Dump the Pydantic model straight to JSON.
+
+        data = asyncio.run(agent_extract_page(args.url))
+
         with open(args.out, "w", encoding="utf-8") as f:
             f.write(data.model_dump_json(indent=2))
-            
+
         print(f"✅ Done! Saved to {args.out}")
 
 if __name__ == "__main__":

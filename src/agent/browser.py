@@ -1,36 +1,62 @@
+import json
 from browser_use import Agent, Browser, ChatBrowserUse
+from .models import PageSummary, PageLink
 
-async def fetch_page_source(url: str) -> str:
-    # Set keep_alive=True so we can still access the HTML after the agent is done.
-    # Also disabling extensions to skip the SSL/manifest warnings.
-    browser = Browser(keep_alive=True, enable_default_extensions=False)
+
+async def agent_extract_page(url: str) -> PageSummary:
+    """
+    Agent-driven browser navigation + in-browser JS extraction.
+    For Hacker News, this extracts the top story links (span.titleline > a).
+    """
+    browser = Browser(
+        use_cloud=True,
+        keep_alive=True,
+        enable_default_extensions=False,
+    )
 
     await browser.start()
     try:
         llm = ChatBrowserUse()
 
-        # Pass our specific browser instance here so the agent reuses the session
-        # instead of spinning up a totally new window.
         agent = Agent(
             task=f"Open {url} and wait until the page is fully loaded.",
             browser_session=browser,
             llm=llm,
         )
 
-        # Run the agent
         await agent.run()
 
-        # The browser should still be connected here since we flagged it to stay alive.
         page = await browser.get_current_page()
         if page is None:
-            # Handle the edge case where the page context gets lost: just re-open in the current session.
             await browser.new_page(url)
             page = await browser.get_current_page()
 
-        html = await page.evaluate("() => document.documentElement.outerHTML")
-        return html
+        # Extract data inside the browser. We return a JSON string on purpose
+        # to avoid "dict vs string" inconsistencies across runtimes.
+        raw = await page.evaluate(
+            """() => JSON.stringify({
+              title: document.title || "No Title",
+              headings: Array.from(document.querySelectorAll("h1,h2,h3"))
+                .map(h => (h.innerText || "").trim())
+                .filter(Boolean),
+
+              // Hacker News top story title links
+              links: Array.from(document.querySelectorAll("span.titleline > a"))
+                .slice(0, 5)
+                .map(a => ({
+                  text: (a.textContent || "").trim(),
+                  href: a.href
+                })),
+            })"""
+        )
+
+        data = json.loads(raw)
+
+        return PageSummary(
+            title=data["title"],
+            headings=data["headings"],
+            links=[PageLink(**l) for l in data["links"]],
+        )
 
     finally:
-        # Important: standard stop() won't actually close the window when keep_alive is on.
-        # kill() forces a proper shutdown so we don't leave zombie processes.
         await browser.kill()

@@ -1,6 +1,6 @@
 [project]
 name = "browser-use-mini-agent"
-version = "0.1.0"
+version = "0.2.0"
 description = "A minimal Python CLI demonstrating agent-based browser automation with browser-use. Opens a URL via an agent, extracts basic page information, and exports structured JSON."
 readme = "README.md"
 requires-python = ">=3.12"
