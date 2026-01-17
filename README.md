@@ -95,7 +95,6 @@ browser-use-mini-agent/
 │     └─ sample.html
 ├─ examples/
 │  └─ example_output.json
-├─ .github/workflows/ci.yml
 ├─ pyproject.toml
 └─ README.md
 ```
